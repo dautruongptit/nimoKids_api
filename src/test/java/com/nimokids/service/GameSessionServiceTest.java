@@ -684,7 +684,11 @@ class GameSessionServiceTest {
         assertThat(text).doesNotContainIgnoringCase("correct");
         assertThat(text).doesNotContain(right.answerItemId().toString());
         assertThat(fieldNames(question)).containsExactlyInAnyOrder(
-                "id", "questionText", "questionTextVi", "questionVoice", "objectSound", "questionImage", "visual", "options");
+                "id", "questionText", "questionTextVi", "questionVoice", "objectSound", "questionImage", "visual",
+                "questionType", "options");
+        // The kind of question only tells the screen how to draw the picture: it does not reveal the answer.
+        assertThat(question.get("questionType").isNull() ? null : question.get("questionType").asText())
+                .isEqualTo(first.getQuestionSnapshot().questionType());
         assertThat(fieldNames(question.get("visual"))).containsExactlyInAnyOrder("type", "objectImage", "count");
         assertThat(question.get("questionImage").isNull()).isTrue();
         assertThat(question.get("visual").get("count").asInt()).isEqualTo(first.getQuestionSnapshot().visual().count());
