@@ -339,4 +339,40 @@ class OptionGeneratorTest {
         generator.generate(question(bird, singleRule()));
         verify(repository).findRandomMatching(anyString(), any(), anyInt(), eq(false));
     }
+
+    @Test
+    void aGeneratorThatPicksItsOwnWrongAnswersNeedsNoDistractorRules() {
+        AnswerItem seven = numberItem(7);
+        List<AnswerItem> wrong = List.of(numberItem(4), numberItem(3), numberItem(9));
+        GameQuestion arithmetic = GameQuestion.builder().questionText("What is the result?")
+                .metadata(Map.of("generator", Map.of("type", "MATH_ARITHMETIC"))).build();
+        arithmetic.setId(UUID.randomUUID());
+        DynamicQuestion dynamic = new DynamicQuestion(seven, Map.of("value", 7), null, Map.of(), "5 + 2 =", wrong);
+
+        List<SnapshotOption> options = generator.generate(arithmetic, dynamic);
+
+        assertThat(options).extracting(SnapshotOption::text).containsExactlyInAnyOrder("7", "4", "3", "9");
+        assertThat(options.stream().filter(SnapshotOption::isCorrect)).singleElement()
+                .satisfies(correct -> assertThat(correct.answerItemId()).isEqualTo(seven.getId()));
+        assertThat(options.stream().map(SnapshotOption::optionId)).doesNotHaveDuplicates();
+        verify(repository, never()).findRandomMatching(anyString(), any(), anyInt(), anyBoolean());
+    }
+
+    @Test
+    void aGeneratedWrongAnswerThatEqualsTheResultIsRejected() {
+        AnswerItem seven = numberItem(7);
+        GameQuestion arithmetic = GameQuestion.builder().questionText("What is the result?")
+                .metadata(Map.of("generator", Map.of("type", "MATH_ARITHMETIC"))).build();
+        arithmetic.setId(UUID.randomUUID());
+        DynamicQuestion dynamic = new DynamicQuestion(seven, Map.of("value", 7), null, Map.of(), "5 + 2 =",
+                List.of(numberItem(4), numberItem(3), numberItem(7)));
+
+        assertThatThrownBy(() -> generator.generate(arithmetic, dynamic)).isInstanceOf(InvalidDistractorRulesException.class);
+    }
+
+    private static AnswerItem numberItem(int value) {
+        AnswerItem number = item(String.valueOf(value));
+        number.getMetadata().put("value", value);
+        return number;
+    }
 }

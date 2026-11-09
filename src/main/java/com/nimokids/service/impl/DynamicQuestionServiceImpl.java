@@ -8,6 +8,7 @@ import com.nimokids.entity.QuestionVisual;
 import com.nimokids.exception.InvalidDistractorRulesException;
 import com.nimokids.repository.AnswerItemRepository;
 import com.nimokids.service.DynamicQuestionService;
+import com.nimokids.service.generation.ArithmeticQuestionGenerator;
 import com.nimokids.service.generation.DynamicQuestion;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
+ * Generators: {@code MATH_ARITHMETIC} is handled by {@link ArithmeticQuestionGenerator}.
+ *
  * Generator {@code COUNT_OBJECTS} (HOW_MANY): picks a count N and an object, finds the number item whose
  * {@code value} is N, and describes the picture ("draw N of this object").
  *
@@ -42,6 +45,7 @@ public class DynamicQuestionServiceImpl implements DynamicQuestionService {
     private final AnswerItemRepository answerItemRepository;
     private final ObjectMapper objectMapper;
     private final RandomGenerator random;
+    private final ArithmeticQuestionGenerator arithmetic;
 
     @Autowired
     public DynamicQuestionServiceImpl(AnswerItemRepository answerItemRepository, ObjectMapper objectMapper) {
@@ -52,6 +56,7 @@ public class DynamicQuestionServiceImpl implements DynamicQuestionService {
         this.answerItemRepository = answerItemRepository;
         this.objectMapper = objectMapper;
         this.random = random;
+        this.arithmetic = new ArithmeticQuestionGenerator(answerItemRepository, random);
     }
 
     @Override
@@ -66,6 +71,9 @@ public class DynamicQuestionServiceImpl implements DynamicQuestionService {
             throw new InvalidDistractorRulesException("metadata." + GENERATOR_KEY + " must be an object");
         }
         String type = String.valueOf(generator.get("type"));
+        if (ArithmeticQuestionGenerator.TYPE.equals(type)) {
+            return Optional.of(arithmetic.generate(question, generator, basicEnglishOnly));
+        }
         if (!COUNT_OBJECTS.equals(type)) {
             throw new InvalidDistractorRulesException("Unknown question generator: " + type);
         }

@@ -66,6 +66,10 @@ public record QuestionSnapshot(
         if (dynamic == null && metadata.get("question_image") instanceof String own && !own.isBlank()) {
             emoji = own;
         }
+        // A generated text picture (MATH_ARITHMETIC: "5 + 2 =") is frozen with the question like any other picture.
+        if (dynamic != null && dynamic.questionImage() != null && !dynamic.questionImage().isBlank()) {
+            emoji = dynamic.questionImage();
+        }
         Map<String, Object> generation = new java.util.LinkedHashMap<>();
         if (metadata.get("distractor_rules") != null) {
             generation.put("distractor_rules", metadata.get("distractor_rules"));

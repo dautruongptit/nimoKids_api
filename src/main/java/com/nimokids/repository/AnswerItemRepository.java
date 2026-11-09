@@ -60,4 +60,18 @@ public interface AnswerItemRepository extends JpaRepository<AnswerItem, UUID> {
     default List<AnswerItem> findRandomActive(String match, int limit) {
         return findRandomActive(match, limit, false);
     }
+
+    /**
+     * The active items of one category whose tag {@code value} is one of {@code values}, e.g. the number items 4, 7, 3
+     * and 9 of a MATH_ARITHMETIC question. {@code value} is compared as text so rows without a numeric value never
+     * make the query fail. Media is loaded by the caller with {@link #findAllWithMedia}.
+     */
+    @Query(value = """
+            SELECT * FROM answer_items
+            WHERE is_active = TRUE
+              AND metadata ->> 'category' = :category
+              AND metadata ->> 'value' IN (:values)
+              AND (:basicEnglishOnly = FALSE OR is_basic_english = TRUE)
+            """, nativeQuery = true)
+    List<AnswerItem> findActiveByCategoryAndValues(String category, Collection<String> values, boolean basicEnglishOnly);
 }

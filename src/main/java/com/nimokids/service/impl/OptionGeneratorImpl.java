@@ -51,7 +51,10 @@ public class OptionGeneratorImpl implements OptionGenerator {
         if (correct == null) {
             throw new InvalidDistractorRulesException("Question " + question.getId() + " has no correct answer item and no generator");
         }
-        List<DistractorRule> rules = DistractorRules.parse(question.getMetadata(), GameConstants.DISTRACTORS_PER_QUESTION);
+        // A generator that picks its own wrong answers (MATH_ARITHMETIC) does not need distractor_rules.
+        boolean ownDistractors = dynamic != null && !dynamic.distractors().isEmpty();
+        List<DistractorRule> rules = ownDistractors ? List.of()
+                : DistractorRules.parse(question.getMetadata(), GameConstants.DISTRACTORS_PER_QUESTION);
 
         Map<String, Object> correctMatch = dynamic != null ? dynamic.correctMatch()
                 : DistractorRules.parseCorrectMatch(question.getMetadata());
@@ -66,6 +69,19 @@ public class OptionGeneratorImpl implements OptionGenerator {
         usedNames.add(normalized(correct.getName()));
 
         List<AnswerItem> distractors = new ArrayList<>();
+        if (ownDistractors) {
+            answerItemRepository.findAllWithMedia(dynamic.distractors().stream().map(AnswerItem::getId).toList());
+            for (AnswerItem candidate : dynamic.distractors()) {
+                // Same safety net as below: an item that could also be right is never shown as a wrong answer.
+                if (TagMatcher.satisfies(candidate.getMetadata(), correctMatch)
+                        || !usedNames.add(normalized(candidate.getName()))) {
+                    throw new InvalidDistractorRulesException("Question " + question.getId() + ": generated wrong answer '"
+                            + candidate.getName() + "' is not distinct from the correct answer " + correctMatch);
+                }
+                distractors.add(candidate);
+                excludedIds.add(candidate.getId());
+            }
+        }
         for (DistractorRule rule : rules) {
             List<AnswerItem> candidates = answerItemRepository.findRandomMatching(
                     toJson(rule), List.copyOf(excludedIds), rule.count() * CANDIDATES_PER_PICK, basicEnglishOnly);
