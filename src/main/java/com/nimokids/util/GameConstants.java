@@ -72,6 +72,9 @@ public final class GameConstants {
     public static final String FEEDBACK_WRONG_VI = "Thử lại nhé!";
     public static final String FEEDBACK_TIMEOUT_VI = "Hết giờ rồi!";
 
+    /** Where the browser reads the picture of an answer item that has one (see MediaController); %s = the item id. */
+    public static final String ITEM_IMAGE_PATH_FORMAT = "/api/v1/media/answer-items/%s/image";
+
     public static final String ALL_TOPICS_EN = "All Topics";
     public static final String ALL_TOPICS_VI = "Tất cả chủ đề";
 
