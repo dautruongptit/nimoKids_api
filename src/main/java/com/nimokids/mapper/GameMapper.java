@@ -79,6 +79,7 @@ public class GameMapper {
                 frozen.questionImage(),
                 frozen.visual() == null ? null
                         : new QuestionVisualResponse(frozen.visual().type(), frozen.visual().objectImage(), frozen.visual().count()),
+                frozen.questionType(),
                 sessionQuestion.getOptionsSnapshot().stream()
                         .sorted(Comparator.comparingInt(SnapshotOption::displayOrder))
                         .map(option -> new OptionResponse(option.optionId(), option.text(), option.imageUrl(), option.voiceUrl()))

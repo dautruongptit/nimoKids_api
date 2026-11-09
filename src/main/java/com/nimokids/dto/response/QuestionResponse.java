@@ -20,5 +20,7 @@ public record QuestionResponse(
         String questionImage,
         /** Structured picture of a dynamic question (e.g. draw N objects); null for ordinary questions. */
         QuestionVisualResponse visual,
+        /** Kind of question (e.g. COLOR_RECOGNITION): lets the screen choose how to show its picture; may be null. */
+        String questionType,
         List<OptionResponse> options) {
 }

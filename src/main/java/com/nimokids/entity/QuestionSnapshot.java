@@ -2,6 +2,7 @@ package com.nimokids.entity;
 
 import com.nimokids.service.generation.DynamicQuestion;
 import com.nimokids.service.language.ResolvedQuestion;
+import com.nimokids.util.GameConstants;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,7 +17,8 @@ import java.util.UUID;
  * @param questionKey      stable key of the question (template / key of the bank)
  * @param questionText     the text in the session language (see {@code languageMode})
  * @param questionTextVi   Vietnamese subtitle of the question (VI_EN only), else null
- * @param questionImage    picture of the answer item (an emoji today, an URL later)
+ * @param questionImage    picture of the answer item: an emoji, a path to its stored picture (only the item id is kept
+ *                         here) or the question's own picture such as an expression
  * @param generation       the rules that produced the options (distractor_rules, correct_match), for audit
  */
 public record QuestionSnapshot(
@@ -53,6 +55,12 @@ public record QuestionSnapshot(
         AnswerItem correct = dynamic != null ? dynamic.correctItem() : question.getCorrectAnswerItem();
         Object emoji = dynamic == null && correct != null && correct.getMetadata() != null
                 ? correct.getMetadata().get("emoji") : null;
+        // An item with a real picture (metadata.image) is shown through it; only its id is frozen here, the picture
+        // itself is read when it is displayed. Items without one keep their emoji.
+        if (dynamic == null && correct != null && correct.getId() != null && correct.getMetadata() != null
+                && correct.getMetadata().get("image") instanceof String image && !image.isBlank()) {
+            emoji = GameConstants.ITEM_IMAGE_PATH_FORMAT.formatted(correct.getId());
+        }
         Map<String, Object> metadata = question.getMetadata() != null ? question.getMetadata() : Map.of();
         // A question may carry its own picture (CALCULATE draws the expression); it replaces the answer's picture.
         if (dynamic == null && metadata.get("question_image") instanceof String own && !own.isBlank()) {
