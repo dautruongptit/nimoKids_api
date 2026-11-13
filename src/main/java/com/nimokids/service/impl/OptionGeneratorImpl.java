@@ -7,6 +7,7 @@ import com.nimokids.entity.GameQuestion;
 import com.nimokids.entity.MediaAsset;
 import com.nimokids.entity.SnapshotOption;
 import com.nimokids.exception.InsufficientDistractorsException;
+import com.nimokids.exception.BusinessException;
 import com.nimokids.exception.InvalidDistractorRulesException;
 import com.nimokids.repository.AnswerItemRepository;
 import com.nimokids.service.OptionGenerator;
@@ -45,7 +46,9 @@ public class OptionGeneratorImpl implements OptionGenerator {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(readOnly = true)
+    // A BusinessException here means "skip this question": the caller catches it and carries on, so it must not mark the
+    // surrounding session transaction rollback-only (else the commit fails with UnexpectedRollbackException -> HTTP 500).
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     public List<SnapshotOption> generate(GameQuestion question, DynamicQuestion dynamic, boolean basicEnglishOnly) {
         AnswerItem correct = dynamic != null ? dynamic.correctItem() : question.getCorrectAnswerItem();
         if (correct == null) {

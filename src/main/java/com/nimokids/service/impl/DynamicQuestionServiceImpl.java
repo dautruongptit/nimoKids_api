@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimokids.entity.AnswerItem;
 import com.nimokids.entity.GameQuestion;
 import com.nimokids.entity.QuestionVisual;
+import com.nimokids.exception.BusinessException;
 import com.nimokids.exception.InvalidDistractorRulesException;
 import com.nimokids.repository.AnswerItemRepository;
 import com.nimokids.service.DynamicQuestionService;
@@ -60,7 +61,9 @@ public class DynamicQuestionServiceImpl implements DynamicQuestionService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    // A BusinessException here means "skip this question": the caller catches it and carries on, so it must not mark the
+    // surrounding session transaction rollback-only (else the commit fails with UnexpectedRollbackException -> HTTP 500).
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     public Optional<DynamicQuestion> prepare(GameQuestion question, boolean basicEnglishOnly) {
         Map<String, Object> metadata = question.getMetadata();
         Object raw = metadata == null ? null : metadata.get(GENERATOR_KEY);
