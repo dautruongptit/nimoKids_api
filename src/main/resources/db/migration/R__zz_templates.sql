@@ -34,8 +34,7 @@ VALUES
     ('WHICH_FEWER', 'TEMPLATE', 'COMPARISON', 'AGE_4_5', 2, '{"en": {"text": "Which one has fewer?"}, "vi": {"text": "Cái nào có ít hơn?"}, "ja": {"text": "どちらが少ないですか？"}, "zh": {"text": "哪个更少？"}}', '{"bank_key": "Q19", "status": "PLANNED", "reason": "AGE_4_5: needs the counting generator"}', FALSE),
     ('NUMBER_BIGGER', 'TEMPLATE', 'COMPARISON', 'AGE_4_5', 2, '{"en": {"text": "Which number is bigger?"}, "vi": {"text": "Số nào lớn hơn?"}, "ja": {"text": "どの数字が大きいですか？"}, "zh": {"text": "哪个数字更大？"}}', '{"bank_key": "Q33", "status": "PLANNED", "reason": "AGE_4_5: needs the math generator"}', FALSE),
     ('NUMBER_SMALLER', 'TEMPLATE', 'COMPARISON', 'AGE_4_5', 2, '{"en": {"text": "Which number is smaller?"}, "vi": {"text": "Số nào nhỏ hơn?"}, "ja": {"text": "どの数字が小さいですか？"}, "zh": {"text": "哪个数字更小？"}}', '{"bank_key": "Q34", "status": "PLANNED", "reason": "AGE_4_5: needs the math generator"}', FALSE),
-    ('MISSING_NUMBER', 'TEMPLATE', 'SEQUENCE', 'AGE_4_5', 2, '{"en": {"text": "Which number is missing?"}, "vi": {"text": "Số nào còn thiếu?"}, "ja": {"text": "どの数字が足りませんか？"}, "zh": {"text": "缺少哪个数字？"}}', '{"bank_key": "Q40", "status": "PLANNED", "reason": "AGE_4_5: needs the math generator"}', FALSE),
-    ('WHAT_LETTER', 'TEMPLATE', 'IMAGE_TO_WORD', 'AGE_1_3', 1, '{"en": {"text": "What letter is this?"}, "vi": {"text": "Đây là chữ gì?"}}', '{"bank_key": "EXT-01", "status": "ACTIVE", "target": "item", "topics": ["ALPHABET"], "distractors": {"from": "category", "count": 3}}', TRUE)
+    ('MISSING_NUMBER', 'TEMPLATE', 'SEQUENCE', 'AGE_4_5', 2, '{"en": {"text": "Which number is missing?"}, "vi": {"text": "Số nào còn thiếu?"}, "ja": {"text": "どの数字が足りませんか？"}, "zh": {"text": "缺少哪个数字？"}}', '{"bank_key": "Q40", "status": "PLANNED", "reason": "AGE_4_5: needs the math generator"}', FALSE)
 ON CONFLICT (code) DO UPDATE
     SET question_type = EXCLUDED.question_type, age_group = EXCLUDED.age_group, difficulty = EXCLUDED.difficulty,
         i18n = EXCLUDED.i18n, generation = EXCLUDED.generation, is_active = EXCLUDED.is_active, updated_at = now()
@@ -56,18 +55,10 @@ FROM (VALUES
     ('COLORS_DARK_BLUE', 'blue'),
     ('SEA_ANIMALS_TURTLE', 'turtle'),
     ('SEA_ANIMALS_SEA_TURTLE', 'turtle'),
-    ('NATURE_SUN', 'sun'),
-    ('NATURE_SUNLIGHT', 'sun'),
-    ('NATURE_PLANT', 'plant'),
-    ('NATURE_TREE', 'plant'),
     ('BODY_PARTS_HANDS', 'hands'),
     ('BODY_PARTS_FINGERS', 'hands'),
     ('BODY_PARTS_HEAD', 'head'),
     ('BODY_PARTS_HAIR', 'head'),
-    ('CLOTHES_SHOES', 'footwear'),
-    ('CLOTHES_BOOTS', 'footwear'),
-    ('CLOTHES_JACKET', 'coat'),
-    ('CLOTHES_RAINCOAT', 'coat'),
     ('VEHICLES_CAR', 'car'),
     ('VEHICLES_POLICE_CAR', 'car')
 ) AS v(code, tag)
