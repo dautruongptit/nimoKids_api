@@ -73,7 +73,6 @@ public class OptionGeneratorImpl implements OptionGenerator {
 
         List<AnswerItem> distractors = new ArrayList<>();
         if (ownDistractors) {
-            answerItemRepository.findAllWithMedia(dynamic.distractors().stream().map(AnswerItem::getId).toList());
             for (AnswerItem candidate : dynamic.distractors()) {
                 // Same safety net as below: an item that could also be right is never shown as a wrong answer.
                 if (TagMatcher.satisfies(candidate.getMetadata(), correctMatch)
@@ -88,9 +87,6 @@ public class OptionGeneratorImpl implements OptionGenerator {
         for (DistractorRule rule : rules) {
             List<AnswerItem> candidates = answerItemRepository.findRandomMatching(
                     toJson(rule), List.copyOf(excludedIds), rule.count() * CANDIDATES_PER_PICK, basicEnglishOnly);
-            if (!candidates.isEmpty()) {
-                answerItemRepository.findAllWithMedia(candidates.stream().map(AnswerItem::getId).toList());
-            }
             int picked = 0;
             for (AnswerItem candidate : candidates) {
                 if (picked == rule.count()) {
@@ -115,6 +111,7 @@ public class OptionGeneratorImpl implements OptionGenerator {
         List<AnswerItem> all = new ArrayList<>(distractors);
         all.add(correct);
         Collections.shuffle(all, ThreadLocalRandom.current());
+        preloadMedia(all);
 
         List<SnapshotOption> options = new ArrayList<>(all.size());
         for (int i = 0; i < all.size(); i++) {
@@ -129,6 +126,22 @@ public class OptionGeneratorImpl implements OptionGenerator {
                     item.getId().equals(correct.getId())));
         }
         return options;
+    }
+
+    /**
+     * Loads the image and voice of the 4 chosen items in ONE query, so building the options costs no lazy load per item.
+     * Only the items that really reference a media asset are loaded: an item without image_id / voice_id has a null
+     * association (no proxy), so reading it needs no query at all, and most items have none (pictures live in
+     * metadata). Previously every candidate of every rule was re-read here, chosen or not.
+     */
+    private void preloadMedia(List<AnswerItem> items) {
+        List<UUID> withMedia = items.stream()
+                .filter(item -> item.getImage() != null || item.getVoice() != null)
+                .map(AnswerItem::getId)
+                .toList();
+        if (!withMedia.isEmpty()) {
+            answerItemRepository.findAllWithMedia(withMedia);
+        }
     }
 
     private String toJson(DistractorRule rule) {

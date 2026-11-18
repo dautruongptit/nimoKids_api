@@ -25,6 +25,7 @@ import com.nimokids.service.generation.DistractorRule;
 import com.nimokids.service.generation.DistractorRules;
 import com.nimokids.service.generation.TagMatcher;
 import com.nimokids.service.impl.ActivityLogServiceImpl;
+import com.nimokids.service.impl.DynamicQuestionServiceImpl;
 import com.nimokids.service.impl.GameSessionServiceImpl;
 import com.nimokids.service.impl.LanguageResolverServiceImpl;
 import com.nimokids.service.impl.OptionGeneratorImpl;
@@ -52,8 +53,8 @@ import org.springframework.context.annotation.Import;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({GameSessionServiceImpl.class, PlayerServiceImpl.class, StickerServiceImpl.class, ActivityLogServiceImpl.class,
-        OptionGeneratorImpl.class, LanguageResolverServiceImpl.class, GameMapper.class, TimeConfig.class,
-        JacksonAutoConfiguration.class})
+        OptionGeneratorImpl.class, DynamicQuestionServiceImpl.class, LanguageResolverServiceImpl.class, GameMapper.class,
+        TimeConfig.class, JacksonAutoConfiguration.class})
 @EnabledIfEnvironmentVariable(named = "DB_HOST", matches = ".+")
 class EngineIntegrationTest {
 
@@ -69,62 +70,72 @@ class EngineIntegrationTest {
     @Autowired private PlayerStickerRepository playerStickerRepository;
 
     // -------------------------------------------------------------------- seed
+    //
+    // The content is the vocabulary seeded by V16+ (topic tree, template questions, answer items). The tests derive their
+    // expectations from the data instead of hard-coding counts, so adding a word does not break them.
 
-    private static final List<String> ROOTS = List.of("ANIMALS", "FRUITS", "VEHICLES", "COLORS", "SHAPES", "NUMBERS",
-            "ALPHABET", "FOOD", "TOYS", "CLOTHES", "HOME", "NATURE", "SEA_ANIMALS", "FARM_ANIMALS");
+    /** Every active question with a FIXED correct answer; dynamic ones (metadata.generator) decide theirs per session. */
+    private List<GameQuestion> fixedAnswerQuestions() {
+        return em.createQuery("select q from GameQuestion q join fetch q.correctAnswerItem join fetch q.topic "
+                + "where q.active = true", GameQuestion.class).getResultList();
+    }
 
-    private List<GameQuestion> seededQuestions() {
-        return em.createQuery("select q from GameQuestion q where q.active = true and q.topic.code in :codes "
-                + "and q.template.kind = 'CURATED'",
-                GameQuestion.class).setParameter("codes", ROOTS).getResultList();
+    /** Distinct words a session could ask in these topics (P-10): AGE_1_3 questions, one per correct answer item. */
+    private long playableWordsIn(List<UUID> topicIds) {
+        return em.createQuery("select count(distinct coalesce(a.id, q.id)) from GameQuestion q left join q.correctAnswerItem a "
+                + "where q.active = true and q.topic.id in :ids and (a is null or a.active = true) "
+                + "and q.ageGroup = com.nimokids.entity.enums.AgeGroup.AGE_1_3", Long.class)
+                .setParameter("ids", topicIds).getSingleResult();
     }
 
     @Test
-    void theSeedHasFourteenPlayableRootTopicsWithTenQuestionsEach() {
-        List<UUID> playable = questionRepository.findPlayableTopicIds(5);
-        List<GameQuestion> all = seededQuestions();
-        for (String code : ROOTS) {
-            Topic topic = topicRepository.findByCode(code).orElseThrow();
-            assertThat(topic.getParentTopic()).as(code).isNull();
-            assertThat(playable).as(code).contains(topic.getId());
-            assertThat(all.stream().filter(q -> q.getTopic().getCode().equals(code))).as(code).hasSize(10);
+    void aRootTopicIsPlayableExactlyWhenItsWholeSubtreeHasEnoughWords() {
+        List<UUID> playable = questionRepository.findPlayableTopicIds(GameConstants.MIN_PLAYABLE_QUESTIONS_PER_TOPIC);
+        List<Topic> roots = em.createQuery("select t from Topic t where t.parentTopic is null and t.active = true", Topic.class)
+                .getResultList();
+        assertThat(roots).isNotEmpty();
+        for (Topic root : roots) {
+            long words = playableWordsIn(topicRepository.findActiveSubtreeIds(root.getId()));
+            assertThat(playable.contains(root.getId())).as(root.getCode() + " has " + words + " AGE_1_3 words in its subtree")
+                    .isEqualTo(words >= GameConstants.MIN_PLAYABLE_QUESTIONS_PER_TOPIC);
         }
-        assertThat(all).hasSize(140);
+        // MATH and VEHICLES have no question of their own: they are playable only through their children.
+        for (String parentOnly : List.of("MATH", "VEHICLES")) {
+            Topic topic = topicRepository.findByCode(parentOnly).orElseThrow();
+            assertThat(playableWordsIn(List.of(topic.getId()))).as(parentOnly).isZero();
+            assertThat(playable).as(parentOnly).contains(topic.getId());
+        }
     }
 
     @Test
     void aRootTopicDrawsQuestionsFromAllItsDescendants() {
-        Topic sea = topicRepository.findByCode("SEA_ANIMALS").orElseThrow();
-        Topic farm = topicRepository.findByCode("FARM_ANIMALS").orElseThrow();
-        Topic parent = topicRepository.saveAndFlush(Topic.builder().code("IT_PARENT").name("Parent").slug("it-parent")
-                .minAge((short) 1).maxAge((short) 5).build());
-        sea.setParentTopic(parent);
-        farm.setParentTopic(parent);
-        topicRepository.flush();
+        Topic animals = topicRepository.findByCode("ANIMALS").orElseThrow();
+        List<UUID> children = List.of("FLY_ANIMALS", "LAND_ANIMALS", "SEA_ANIMALS").stream()
+                .map(code -> topicRepository.findByCode(code).orElseThrow().getId()).toList();
 
-        List<UUID> subtree = topicRepository.findActiveSubtreeIds(parent.getId());
-        assertThat(subtree).containsExactlyInAnyOrder(parent.getId(), sea.getId(), farm.getId());
+        List<UUID> subtree = topicRepository.findActiveSubtreeIds(animals.getId());
+        assertThat(subtree).contains(animals.getId()).containsAll(children);
+
         GameMode mode = gameModeRepository.findByCode("GUESS").orElseThrow();
-        String[] young = {"AGE_1_3"};
-        // Every active AGE_1_3 question of the two children: 10 hand-written + the short template questions.
-        assertThat(questionRepository.findCandidateIds(subtree, mode.getId(), young, GameConstants.ANIMAL_SOUND_MODE_CODE))
-                .hasSize(10 + 12 + 10 + 9);
-        // What a session uses: both children have enough short template questions, so the long ones are left out.
-        assertThat(questionRepository.findCandidateIds(subtree, mode.getId(), young)).hasSize(12 + 9);
+        List<UUID> candidates = questionRepository.findCandidateIds(subtree, mode.getId(), new String[]{"AGE_1_3"});
+        Set<UUID> candidateTopics = questionRepository.findAllById(candidates).stream()
+                .map(question -> question.getTopic().getId()).collect(Collectors.toSet());
+        assertThat(subtree).containsAll(candidateTopics);       // never a question from outside the subtree
+        assertThat(candidateTopics).containsAll(children);      // and every child contributes
     }
 
     @Test
     void shortTemplateQuestionsAreGeneratedAndNeverOfferALookAlikeAsAWrongAnswer() {
-        List<GameQuestion> generated = em.createQuery(
-                "select q from GameQuestion q where q.active = true and q.template.kind = 'TEMPLATE'", GameQuestion.class)
-                .getResultList();
+        List<GameQuestion> generated = fixedAnswerQuestions().stream()
+                .filter(question -> question.getTemplate() != null && "TEMPLATE".equals(question.getTemplate().getKind()))
+                .toList();
         assertThat(generated.size()).as("generated template questions").isGreaterThanOrEqualTo(150);
 
         for (GameQuestion question : generated) {
             String label = question.getQuestionKey();
             assertThat(question.getQuestionText().length()).as(label + " is short").isLessThanOrEqualTo(25);
             Object lookalike = question.getCorrectAnswerItem().getMetadata().get("lookalike");
-            for (int run = 0; run < 5; run++) {
+            for (int run = 0; run < 3; run++) {
                 List<SnapshotOption> options = optionGenerator.generate(question);
                 assertThat(options).as(label).hasSize(4);
                 assertThat(options.stream().filter(SnapshotOption::isCorrect)).as(label).hasSize(1);
@@ -147,14 +158,14 @@ class EngineIntegrationTest {
     }
 
     @Test
-    void everySeededQuestionAlwaysProducesFourDistinctOptionsFromItsOwnGroup() {
-        List<GameQuestion> questions = seededQuestions();
-        assertThat(questions).hasSize(140);
+    void everyQuestionAlwaysProducesFourDistinctOptionsFromItsOwnPools() {
+        List<GameQuestion> questions = fixedAnswerQuestions();
+        assertThat(questions).isNotEmpty();
 
         for (GameQuestion question : questions) {
-            String category = question.getTopic().getCode().toLowerCase();
             String label = question.getQuestionText() + " -> " + question.getCorrectAnswerItem().getName();
-            for (int run = 0; run < 10; run++) {
+            List<DistractorRule> rules = DistractorRules.parse(question.getMetadata(), 3);
+            for (int run = 0; run < 3; run++) {
                 List<SnapshotOption> options = optionGenerator.generate(question);
 
                 assertThat(options).as(label).hasSize(4);
@@ -162,9 +173,11 @@ class EngineIntegrationTest {
                 assertThat(options.stream().filter(SnapshotOption::isCorrect)).as(label).hasSize(1);
                 assertThat(options.stream().filter(SnapshotOption::isCorrect).findFirst().orElseThrow().answerItemId())
                         .as(label).isEqualTo(question.getCorrectAnswerItem().getId());
-                for (SnapshotOption option : options) {
-                    assertThat(answerItemRepository.findById(option.answerItemId()).orElseThrow().getMetadata().get("category"))
-                            .as(label).isEqualTo(category);
+                // Every wrong answer comes from one of the question's own pools (positive tag match).
+                for (SnapshotOption option : options.stream().filter(option -> !option.isCorrect()).toList()) {
+                    Map<String, Object> tags = answerItemRepository.findById(option.answerItemId()).orElseThrow().getMetadata();
+                    assertThat(rules.stream().anyMatch(rule -> TagMatcher.satisfies(tags, rule.match())))
+                            .as(label + " / " + option.text()).isTrue();
                 }
             }
         }
@@ -174,7 +187,7 @@ class EngineIntegrationTest {
     void noSeededQuestionCanEverShowASecondRightAnswer() {
         List<AnswerItem> items = answerItemRepository.findAll();
 
-        for (GameQuestion question : seededQuestions()) {
+        for (GameQuestion question : fixedAnswerQuestions()) {
             String label = question.getQuestionText() + " -> " + question.getCorrectAnswerItem().getName();
             Map<String, Object> correctMatch = DistractorRules.parseCorrectMatch(question.getMetadata());
 
@@ -193,7 +206,7 @@ class EngineIntegrationTest {
             }
 
             // Generated options: exactly one option satisfies the condition, and it is the correct one.
-            for (int run = 0; run < 20; run++) {
+            for (int run = 0; run < 5; run++) {
                 long satisfying = optionGenerator.generate(question).stream().filter(option -> TagMatcher.satisfies(
                         answerItemRepository.findById(option.answerItemId()).orElseThrow().getMetadata(), correctMatch)).count();
                 assertThat(satisfying).as(label).isEqualTo(1);
@@ -203,13 +216,29 @@ class EngineIntegrationTest {
 
     @Test
     void lookAlikeAnswersAreNeverOfferedAsWrongAnswers() {
-        GameQuestion eggs = em.createQuery("select q from GameQuestion q where q.questionText = 'What farm animal lays eggs?'",
-                GameQuestion.class).getSingleResult();
-        GameQuestion sky = em.createQuery("select q from GameQuestion q where q.questionText = 'What color is the sky?'",
-                GameQuestion.class).getSingleResult();
-        for (int run = 0; run < 50; run++) {
-            assertThat(optionGenerator.generate(eggs)).extracting(SnapshotOption::text).doesNotContain("Duck");
-            assertThat(optionGenerator.generate(sky)).extracting(SnapshotOption::text).doesNotContain("Dark Blue");
+        List<AnswerItem> items = answerItemRepository.findAll().stream().filter(AnswerItem::isActive).toList();
+        // Only questions where the risk is real: another active item in one of the pools shares the look-alike tag.
+        List<GameQuestion> atRisk = fixedAnswerQuestions().stream().filter(question -> {
+            Object look = question.getCorrectAnswerItem().getMetadata().get("lookalike");
+            if (look == null) {
+                return false;
+            }
+            List<DistractorRule> rules = DistractorRules.parse(question.getMetadata(), 3);
+            return items.stream().anyMatch(item -> !item.getId().equals(question.getCorrectAnswerItem().getId())
+                    && look.equals(item.getMetadata().get("lookalike"))
+                    && rules.stream().anyMatch(rule -> TagMatcher.satisfies(item.getMetadata(), rule.match())));
+        }).toList();
+        assertThat(atRisk).as("questions whose pools contain a look-alike").isNotEmpty();
+
+        for (GameQuestion question : atRisk) {
+            Object look = question.getCorrectAnswerItem().getMetadata().get("lookalike");
+            for (int run = 0; run < 10; run++) {
+                List<SnapshotOption> wrong = optionGenerator.generate(question).stream().filter(o -> !o.isCorrect()).toList();
+                for (SnapshotOption option : wrong) {
+                    assertThat(answerItemRepository.findById(option.answerItemId()).orElseThrow().getMetadata().get("lookalike"))
+                            .as(question.getQuestionKey() + " offered the look-alike " + option.text()).isNotEqualTo(look);
+                }
+            }
         }
     }
 

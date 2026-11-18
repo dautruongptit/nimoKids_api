@@ -85,8 +85,15 @@ public interface GameQuestionRepository extends JpaRepository<GameQuestion, UUID
     }
 
     /**
-     * Topics that are playable: active, with at least {@code minCount} valid questions in their whole subtree
+     * Topics that are playable: active, with at least {@code minCount} DISTINCT words to ask in their whole subtree
      * (a parent can be playable through its children). Counted over all game modes.
+     *
+     * Kept in line with what a session can really draw (docs/DATABASE_CODE_OPTIMIZATION_PLAN.md, P-10), so a listed topic never
+     * answers INSUFFICIENT_QUESTIONS:
+     * - only AGE_1_3 questions count: an AGE_1_3 session uses only those, and an AGE_4_5 session uses them too (plus its
+     *   own), so enough AGE_1_3 words means enough for both age groups (GET /topics does not know the child's age);
+     * - a word is asked once per session, so several wordings of the same correct answer count once; a dynamic question
+     *   (no fixed answer item) counts as its own word.
      *
      * {@code languageMode} (a LanguageMode name, null = any) keeps only the topics that support it, at every level of the
      * tree, and {@code basicEnglishOnly} counts only questions whose answer is a basic English word.
@@ -109,8 +116,9 @@ public interface GameQuestionRepository extends JpaRepository<GameQuestion, UUID
               AND (:basicEnglishOnly = FALSE OR q.correct_answer_item_id IS NULL OR a.is_basic_english = TRUE)
               AND (m.code <> :soundModeCode OR q.object_sound_id IS NOT NULL)
               AND jsonb_typeof(q.metadata -> 'distractor_rules') = 'array'
+              AND q.age_group = 'AGE_1_3'
             GROUP BY tr.root_id
-            HAVING count(*) >= :minCount
+            HAVING count(DISTINCT COALESCE(q.correct_answer_item_id, q.id)) >= :minCount
             """, nativeQuery = true)
     List<UUID> findPlayableTopicIds(long minCount, String soundModeCode, String languageMode, boolean basicEnglishOnly);
 
