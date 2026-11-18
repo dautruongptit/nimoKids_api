@@ -231,6 +231,49 @@ class OptionGeneratorTest {
                 .isInstanceOf(InvalidDistractorRulesException.class).hasMessageContaining("correct_match is required");
     }
 
+    // ------------------------------------------------ media loading (docs/DATABASE_CODE_OPTIMIZATION_PLAN.md, P-04)
+
+    @Test
+    void mediaIsNotQueriedWhenNoChosenItemHasAnImageOrAVoice() {
+        AnswerItem bird = item("Bird");
+        when(repository.findRandomMatching(anyString(), any(), anyInt(), anyBoolean()))
+                .thenReturn(List.of(item("Dog"), item("Cat"), item("Cow"), item("Pig"), item("Hen")));
+
+        List<SnapshotOption> options = generator.generate(question(bird, singleRule()));
+
+        assertThat(options).hasSize(4);
+        verify(repository, never()).findAllWithMedia(any());
+        assertThat(options).extracting(SnapshotOption::imageUrl).containsOnlyNulls();
+        assertThat(options).extracting(SnapshotOption::voiceUrl).containsOnlyNulls();
+    }
+
+    @Test
+    void mediaIsLoadedOnceAndOnlyForTheChosenItemsThatHaveIt() {
+        AnswerItem bird = item("Bird");
+        bird.setImage(MediaAsset.builder().name("bird").storageUrl("https://cdn/bird.png").build());
+        AnswerItem dog = item("Dog");
+        dog.setVoice(MediaAsset.builder().name("dog-v").storageUrl("https://cdn/dog.mp3").build());
+        AnswerItem cat = item("Cat");
+        AnswerItem cow = item("Cow");
+        // A candidate that is NOT chosen (only 3 wrong answers are needed): its media must not be loaded.
+        AnswerItem unused = item("Pig");
+        unused.setImage(MediaAsset.builder().name("pig").storageUrl("https://cdn/pig.png").build());
+        when(repository.findRandomMatching(anyString(), any(), anyInt(), anyBoolean()))
+                .thenReturn(List.of(dog, cat, cow, unused));
+
+        List<SnapshotOption> options = generator.generate(question(bird, singleRule()));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<UUID>> loaded = ArgumentCaptor.forClass(Collection.class);
+        verify(repository, times(1)).findAllWithMedia(loaded.capture());
+        assertThat(loaded.getValue()).containsExactlyInAnyOrder(bird.getId(), dog.getId());
+        assertThat(options).filteredOn(o -> o.answerItemId().equals(bird.getId()))
+                .extracting(SnapshotOption::imageUrl).containsExactly("https://cdn/bird.png");
+        assertThat(options).filteredOn(o -> o.answerItemId().equals(dog.getId()))
+                .extracting(SnapshotOption::voiceUrl).containsExactly("https://cdn/dog.mp3");
+        assertThat(options).extracting(SnapshotOption::answerItemId).doesNotContain(unused.getId());
+    }
+
     // ------------------------------------------------ dynamic question (HOW_MANY): the answer is decided per session
 
     private static AnswerItem number(int value) {

@@ -45,6 +45,11 @@ app:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}
     redirect-uri: ${GOOGLE_REDIRECT_URI:}
+  retention:
+    # LogRetentionJob (hourly): rows of api_logs / activity_logs older than this many days are deleted in batches.
+    # 0 = keep that table forever.
+    api-logs-days: ${API_LOG_RETENTION_DAYS:30}
+    activity-logs-days: ${ACTIVITY_LOG_RETENTION_DAYS:180}
 
 logging:
   pattern:

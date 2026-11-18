@@ -218,12 +218,12 @@ class PostgresIntegrationTest {
         Topic parent = topic("parent", null);
         Topic childA = topic("a", parent);
         Topic childB = topic("b", parent);
-        AnswerItem correct = item("Correct", Map.of("category", "animal"));
+        // A word is asked once per session, so every question has its own correct answer here (see the next test).
         for (int i = 0; i < 3; i++) {
-            question(childA, mode, correct, rules());
+            question(childA, mode, item("A" + i, Map.of("category", "animal")), rules());
         }
         for (int i = 0; i < 2; i++) {
-            question(childB, mode, correct, rules());
+            question(childB, mode, item("B" + i, Map.of("category", "animal")), rules());
         }
 
         List<UUID> playableFive = questionRepository.findPlayableTopicIds(5, SOUND_MODE);
@@ -231,6 +231,34 @@ class PostgresIntegrationTest {
 
         assertThat(playableFive).contains(parent.getId()).doesNotContain(childA.getId(), childB.getId());
         assertThat(playableSix).doesNotContain(parent.getId());
+    }
+
+    /** P-10: five wordings of ONE word cannot fill a session (a word is asked once), so the topic is not offered. */
+    @Test
+    void severalQuestionsForTheSameWordCountAsOneWord() {
+        GameMode mode = mode("GUESS_" + unique());
+        Topic topic = topic("one-word", null);
+        AnswerItem correct = item("Correct", Map.of("category", "animal"));
+        for (int i = 0; i < 5; i++) {
+            question(topic, mode, correct, rules());
+        }
+
+        assertThat(questionRepository.findPlayableTopicIds(5, SOUND_MODE)).doesNotContain(topic.getId());
+        assertThat(questionRepository.findPlayableTopicIds(1, SOUND_MODE)).contains(topic.getId());
+    }
+
+    /** P-10: GET /topics does not know the age, so only AGE_1_3 words count (an AGE_4_5 session uses them too). */
+    @Test
+    void onlyQuestionsForTheYoungestGroupMakeATopicPlayable() {
+        GameMode mode = mode("GUESS_" + unique());
+        Topic olderOnly = topic("older-only", null);
+        for (int i = 0; i < 5; i++) {
+            GameQuestion question = question(olderOnly, mode, item("O" + i, Map.of("category", "animal")), rules());
+            question.setAgeGroup(AgeGroup.AGE_4_5);
+            questionRepository.saveAndFlush(question);
+        }
+
+        assertThat(questionRepository.findPlayableTopicIds(5, SOUND_MODE)).doesNotContain(olderOnly.getId());
     }
 
     // ------------------------------------------------------ snapshot persistence
