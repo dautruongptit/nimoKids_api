@@ -34,6 +34,7 @@ public final class SecurityPaths {
             "/api/v1/media/**",
             "/api/v1/activities/**",
             "/api/v1/players/**",
+            "/api/v1/support-feedback/**",
     };
 
     private SecurityPaths() {

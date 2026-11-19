@@ -80,6 +80,7 @@ Nguồn thật là `R__zz_templates.sql` (chạy lại khi API khởi động); 
 | FRUITS | WHAT_FRUIT | Đây là quả gì? | What fruit is this? |
 | VEGETABLES | WHAT_VEGETABLE | Đây là rau củ gì? | What vegetable is this? |
 | NUMBERS | WHAT_NUMBER | Đây là số mấy? | What number is this? |
+| OBJECTS | WHAT_IS_THIS | Đây là cái gì? | What is this? |
 | COLORS | WHAT_COLOR | Đây là màu gì? | What color is this? |
 | SHAPES | WHAT_SHAPE | Đây là hình gì? | What shape is this? |
 | JOB (nghề nghiệp) | WHAT_JOB | **Đây là ai nhỉ?** | **Who is this?** |
@@ -107,10 +108,17 @@ Hai chủ đề JOB và PEOPLE_CHARACTERS dùng chung một câu và một file 
 - Câu mới hiển thị trên màn hình phải được thu giọng và thêm vào manifest.
 
 ## 8. Màn hình kết quả (web)
-- Thứ tự: cúp 🏆 → "Bé giỏi tuyệt vời! 🎉" → hàng sao → độ chính xác, chuỗi đúng dài nhất, chuỗi hiện tại → nút **"Chơi tiếp! 🚀"**, "Về trang chủ", "Khoe thành tích". ✅
+- Thứ tự: cúp 🏆 → "Giỏi quá! Chúc mừng con 🎉" → hàng sao → độ chính xác, chuỗi đúng dài nhất, chuỗi hiện tại → nút **"Chơi tiếp! 🚀"**, "Về trang chủ", "Khoe thành tích". ✅
 - Không còn dòng "Hoan hô bé đã hoàn thành!" và câu "Bé đã học thêm được rất nhiều điều bổ ích hôm nay!" (bỏ 2026-11-19).
 - Thanh **"Dành cho ba mẹ"** nằm dưới thẻ kết quả, rộng bằng thẻ: "Đăng nhập để lưu điểm và các cột mốc của bé. Không bắt buộc."
   Có nút Google và "Để sau" (chỉ một cách đóng). Là phần phụ, không tranh với nút chơi tiếp. ✅
+
+## 8b. Trợ giúp cho ba mẹ (web, đường dẫn /help)
+
+- Có ở thanh điều hướng (máy tính) và chân trang (mọi màn hình). Gồm: **gửi góp ý**, giới thiệu **tự tạo câu hỏi** (🔜 đợt sau, cần đăng nhập, câu gửi lên để đội ngũ duyệt trước khi vào kho chung), và 3 câu hỏi thường gặp. ✅ (góp ý)
+- Góp ý: loại (Lỗi / Ý tưởng / Câu hỏi muốn thêm / Khác), nội dung 5 đến 2000 ký tự, liên hệ tùy chọn (≤ 200). **Không cần đăng nhập**; chống spam: tối đa **5 tin mỗi giờ** cho mỗi thiết bị (`X-Anonymous-Id`), vượt thì báo `RATE_LIMITED`. ✅
+- Lưu bảng `support_feedback` (V37), trạng thái NEW → SEEN → DONE / REJECTED. API gửi: `POST /api/v1/support-feedback`. Admin (ADMIN, SUPER_ADMIN): `GET /api/v1/admin/support-feedback?status=&page=&size=` và `PATCH /api/v1/admin/support-feedback/{id}` (đổi trạng thái, ghi chú). ✅
+- Chưa có màn admin trên web; hiện xem qua API.
 
 ## 9. Tài khoản và phiên đăng nhập
 - Đăng nhập Google tùy chọn (người dùng) và admin có mật khẩu. ✅
@@ -150,4 +158,7 @@ Hai chủ đề JOB và PEOPLE_CHARACTERS dùng chung một câu và một file 
 | 2026-11-19 | Lời hỏi: JOB và PEOPLE_CHARACTERS đổi thành "Đây là ai nhỉ?" / "Who is this?"; thu lại giọng Hải Đăng (🔧 chưa commit) |
 | 2026-11-19 | Bỏ chủ đề OBJECTS (Các đồ vật) và TOYS (Đồ chơi) cùng câu hỏi và từ của chúng: migration V34 (🔧 chưa commit) |
 | 2026-11-19 | Ẩn chủ đề BODY_PARTS (Bộ phận cơ thể): is_active = false, giữ dữ liệu; migration V35 (🔧 chưa commit) |
+| 2026-11-19 | Lấy lại chủ đề OBJECTS (Các đồ vật) cùng 98 từ: migration V36 (TOYS vẫn bỏ) (🔧 chưa commit) |
+| 2026-11-19 | Màn kết quả: lời chúc đổi từ "Bé giỏi tuyệt vời!" thành "Giỏi quá! Chúc mừng con" (🔧 chưa commit) |
+| 2026-11-19 | Trợ giúp cho ba mẹ: màn Trợ giúp gửi góp ý (không cần đăng nhập, tối đa 5 tin/giờ/thiết bị) lưu bảng support_feedback, admin xem và đổi trạng thái; tạo câu hỏi do phụ huynh để đợt sau (🔧 chưa commit) |
 | 2026-11-19 | Gộp toàn bộ nghiệp vụ vào file này (thay `question-generation.md`) |

@@ -1,4 +1,5 @@
 -- Short question templates ("What is this?") and the questions generated from them.
+-- 2026-11-19: re-run after V36 brought the topic OBJECTS back (its WHAT_IS_THIS questions are generated here).
 -- REPEATABLE and idempotent. It must run AFTER the content seed that creates topics and answer items, hence the "zz"
 -- (Flyway orders repeatable migrations by description: "zz content vi" < "zz templates").
 --
