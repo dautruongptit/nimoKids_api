@@ -82,7 +82,6 @@ Nguồn thật là `R__zz_templates.sql` (chạy lại khi API khởi động); 
 | NUMBERS | WHAT_NUMBER | Đây là số mấy? | What number is this? |
 | COLORS | WHAT_COLOR | Đây là màu gì? | What color is this? |
 | SHAPES | WHAT_SHAPE | Đây là hình gì? | What shape is this? |
-| OBJECTS | WHAT_IS_THIS | Đây là cái gì? | What is this? |
 | JOB (nghề nghiệp) | WHAT_JOB | **Đây là ai nhỉ?** | **Who is this?** |
 | PEOPLE_CHARACTERS | WHO_IS_THIS | **Đây là ai nhỉ?** | Who is this? |
 | LAND/SEA/FLY_VEHICLES | WHAT_VEHICLE | Đây là phương tiện gì? | What vehicle is this? |
@@ -149,4 +148,5 @@ Hai chủ đề JOB và PEOPLE_CHARACTERS dùng chung một câu và một file 
 | 2026-11-19 | Giai đoạn 1: phiên chơi chọn đáp án (từ) trước rồi bốc 1 câu của từ; có cờ bật/tắt (🔧 chưa commit) |
 | 2026-11-19 | Q4 đã code: đáp án sai và câu hỏi mượn từ chủ đề cha khi chủ đề ít từ; truy vấn chủ đề chơi được cập nhật (🔧 chưa commit) |
 | 2026-11-19 | Lời hỏi: JOB và PEOPLE_CHARACTERS đổi thành "Đây là ai nhỉ?" / "Who is this?"; thu lại giọng Hải Đăng (🔧 chưa commit) |
+| 2026-11-19 | Bỏ chủ đề OBJECTS (Các đồ vật) và TOYS (Đồ chơi) cùng câu hỏi và từ của chúng: migration V34 (🔧 chưa commit) |
 | 2026-11-19 | Gộp toàn bộ nghiệp vụ vào file này (thay `question-generation.md`) |
