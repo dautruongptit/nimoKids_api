@@ -136,6 +136,23 @@ public interface GameQuestionRepository extends JpaRepository<GameQuestion, UUID
                 languageMode.basicEnglishOnly());
     }
 
+    /** The fixed answer word of a question (null for a generated one: arithmetic / counting) and whether it is generated. */
+    interface QuestionAnswerKey {
+        UUID getId();
+
+        UUID getAnswerItemId();
+
+        Boolean getGenerated();
+    }
+
+    /** Answer word and kind of each question in ONE query: a session picks the answer word first (BUSINESS_RULES.md 4.1). */
+    @Query(value = """
+            SELECT q.id AS id, q.correct_answer_item_id AS answerItemId, (q.metadata -> 'generator' IS NOT NULL) AS generated
+            FROM game_questions q
+            WHERE q.id IN (:ids)
+            """, nativeQuery = true)
+    List<QuestionAnswerKey> findAnswerKeys(Collection<UUID> ids);
+
     /** Loads questions with everything a session snapshot reads, in ONE query (instead of ~6 lazy loads per question). */
     @Query("""
             SELECT DISTINCT q FROM GameQuestion q

@@ -71,6 +71,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -93,6 +94,14 @@ public class GameSessionServiceImpl implements GameSessionService {
     private final LanguageResolverService languageResolver;
     private final GameMapper mapper;
     private final Clock clock;
+
+    /**
+     * Picks the ANSWER WORD first and then one of its questions (BUSINESS_RULES.md 4.1): every word has the same chance,
+     * however many wordings it has. false = the old way (every question has the same chance). Generated questions
+     * (arithmetic, counting) are always picked as questions.
+     */
+    @Value("${app.question-selection.answer-first:true}")
+    private boolean answerFirst = true;
 
     // ------------------------------------------------------------------ create
 
@@ -150,7 +159,12 @@ public class GameSessionServiceImpl implements GameSessionService {
                         topic != null ? topic.getCode() : "ALL", modeName, ageGroup, hard.size() + easy.size());
                 throw new InsufficientQuestionsException();
             }
-            candidateIds = mixByAgeGroup(hard, easy);
+            if (answerFirst) {
+                Map<UUID, UUID> wordOf = wordOfQuestions(hard, easy);
+                candidateIds = interleave(answerFirstOrder(hard, wordOf::get), answerFirstOrder(easy, wordOf::get));
+            } else {
+                candidateIds = mixByAgeGroup(hard, easy);
+            }
         } else {
             candidateIds = new ArrayList<>(questionRepository.findCandidateIds(subtree, mode.getId(), ageGroups, basicEnglishOnly));
             if (candidateIds.size() < GameConstants.QUESTIONS_PER_SESSION) {
@@ -158,7 +172,12 @@ public class GameSessionServiceImpl implements GameSessionService {
                         topic != null ? topic.getCode() : "ALL", modeName, ageGroup, candidateIds.size());
                 throw new InsufficientQuestionsException();
             }
-            Collections.shuffle(candidateIds, ThreadLocalRandom.current());
+            if (answerFirst) {
+                Map<UUID, UUID> wordOf = wordOfQuestions(candidateIds);
+                candidateIds = answerFirstOrder(candidateIds, wordOf::get);
+            } else {
+                Collections.shuffle(candidateIds, ThreadLocalRandom.current());
+            }
         }
 
         GameSession session = GameSession.builder()
@@ -366,6 +385,57 @@ public class GameSessionServiceImpl implements GameSessionService {
     static List<UUID> mixByAgeGroup(List<UUID> hard, List<UUID> easy) {
         Collections.shuffle(hard, ThreadLocalRandom.current());
         Collections.shuffle(easy, ThreadLocalRandom.current());
+        return interleave(hard, easy);
+    }
+
+    /** The answer word of each fixed-answer question; a generated question has none (it is picked as a question). */
+    @SafeVarargs
+    private Map<UUID, UUID> wordOfQuestions(List<UUID>... pools) {
+        Set<UUID> ids = new HashSet<>();
+        for (List<UUID> pool : pools) {
+            ids.addAll(pool);
+        }
+        Map<UUID, UUID> wordOf = new HashMap<>();
+        for (GameQuestionRepository.QuestionAnswerKey key : questionRepository.findAnswerKeys(ids)) {
+            if (key.getAnswerItemId() != null && !Boolean.TRUE.equals(key.getGenerated())) {
+                wordOf.put(key.getId(), key.getAnswerItemId());
+            }
+        }
+        return wordOf;
+    }
+
+    /**
+     * Orders candidate questions so a session draws WORDS evenly: one random question per word, in random word order,
+     * first; the other questions of the same words follow (used only when the first one cannot be built). A question
+     * without a word (generated) counts as a word of its own.
+     */
+    static List<UUID> answerFirstOrder(List<UUID> candidates, java.util.function.Function<UUID, UUID> wordOf) {
+        Map<UUID, List<UUID>> byWord = new java.util.LinkedHashMap<>();
+        List<List<UUID>> groups = new ArrayList<>();
+        for (UUID candidate : candidates) {
+            UUID word = wordOf.apply(candidate);
+            if (word == null) {
+                groups.add(new ArrayList<>(List.of(candidate)));
+            } else {
+                byWord.computeIfAbsent(word, key -> new ArrayList<>()).add(candidate);
+            }
+        }
+        groups.addAll(byWord.values());
+        Collections.shuffle(groups, ThreadLocalRandom.current());
+        List<UUID> first = new ArrayList<>(groups.size());
+        List<UUID> others = new ArrayList<>();
+        for (List<UUID> group : groups) {
+            Collections.shuffle(group, ThreadLocalRandom.current());
+            first.add(group.get(0));
+            others.addAll(group.subList(1, group.size()));
+        }
+        Collections.shuffle(others, ThreadLocalRandom.current());
+        first.addAll(others);
+        return first;
+    }
+
+    /** Interleaves two ordered pools by {@link GameConstants#AGE_4_5_MIX_PATTERN}; a pool that runs out is replaced by the other. */
+    static List<UUID> interleave(List<UUID> hard, List<UUID> easy) {
         String pattern = GameConstants.AGE_4_5_MIX_PATTERN;
         List<UUID> mixed = new ArrayList<>(hard.size() + easy.size());
         int h = 0;
