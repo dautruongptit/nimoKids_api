@@ -149,4 +149,5 @@ Hai chủ đề JOB và PEOPLE_CHARACTERS dùng chung một câu và một file 
 | 2026-11-19 | Q4 đã code: đáp án sai và câu hỏi mượn từ chủ đề cha khi chủ đề ít từ; truy vấn chủ đề chơi được cập nhật (🔧 chưa commit) |
 | 2026-11-19 | Lời hỏi: JOB và PEOPLE_CHARACTERS đổi thành "Đây là ai nhỉ?" / "Who is this?"; thu lại giọng Hải Đăng (🔧 chưa commit) |
 | 2026-11-19 | Bỏ chủ đề OBJECTS (Các đồ vật) và TOYS (Đồ chơi) cùng câu hỏi và từ của chúng: migration V34 (🔧 chưa commit) |
+| 2026-11-19 | Ẩn chủ đề BODY_PARTS (Bộ phận cơ thể): is_active = false, giữ dữ liệu; migration V35 (🔧 chưa commit) |
 | 2026-11-19 | Gộp toàn bộ nghiệp vụ vào file này (thay `question-generation.md`) |
