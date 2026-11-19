@@ -13,6 +13,31 @@ public interface AnswerItemRepository extends JpaRepository<AnswerItem, UUID> {
     Optional<AnswerItem> findByCode(String code);
 
     /**
+     * Random active words that are the correct answer of an active question somewhere in the topic tree under
+     * {@code rootTopicId} (the root included). Used only as the fallback for wrong answers (Q4, BUSINESS_RULES.md 4.4):
+     * a topic whose own category has too few words borrows wrong answers from its PARENT topic's words.
+     *
+     * @param excludedIds never empty: the correct answer and the wrong answers already picked
+     */
+    @Query(value = """
+            WITH RECURSIVE subtree(id) AS (
+                SELECT id FROM topics WHERE id = :rootTopicId AND is_active = TRUE
+                UNION
+                SELECT t.id FROM topics t JOIN subtree s ON t.parent_id = s.id WHERE t.is_active = TRUE
+            )
+            SELECT a.* FROM answer_items a
+            WHERE a.is_active = TRUE
+              AND a.id NOT IN (:excludedIds)
+              AND (:basicEnglishOnly = FALSE OR a.is_basic_english = TRUE)
+              AND a.id IN (SELECT q.correct_answer_item_id FROM game_questions q
+                           WHERE q.is_active = TRUE AND q.topic_id IN (SELECT id FROM subtree)
+                             AND q.correct_answer_item_id IS NOT NULL)
+            ORDER BY random()
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<AnswerItem> findRandomInTopicTree(UUID rootTopicId, Collection<UUID> excludedIds, int limit, boolean basicEnglishOnly);
+
+    /**
      * Random active items whose tags contain EVERY tag of {@code match} (explicit state matching, JSONB containment).
      *
      * This is the only way wrong answers are found. It deliberately has no tag negation (no "NOT @>", no "<>" on

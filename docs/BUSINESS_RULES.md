@@ -20,7 +20,7 @@
 ## 3. Chọn chủ đề
 - Cây chủ đề: chủ đề được bấm + các chủ đề con đang hoạt động. ✅
 - Chủ đề chỉ hiện để chơi khi có **ít nhất 5 từ khác nhau** hợp lệ (đúng nhóm tuổi `AGE_1_3`). ✅ (P-10)
-  🟡 Theo quyết định Q4 (mục 4.4), chủ đề ít từ sẽ lấy đáp án sai từ chủ đề cha, và quy tắc "ít nhất 5 từ" sẽ đổi khi code.
+  🔧 Ngoại lệ Q4 (mục 4.4): chủ đề con có ≥1 từ riêng mà chủ đề cha có ≥5 từ trong cả cây vẫn chơi được, phần thiếu lấy từ chủ đề cha.
   Chủ đề cha như MATH, VEHICLES chơi được qua các chủ đề con.
 
 ## 4. Tạo câu hỏi — game chính (GUESS)
@@ -65,8 +65,28 @@ Cờ bật/tắt: `app.question-selection.answer-first` (biến môi trường `
   migration `R__` tự tạo `game_questions`. Giai đoạn 3 (tùy chọn): `game_questions` thành bảng nối sinh tự động.
 - ✔ **Q1 (đã chốt 2026-11-19):** "Mode đang chơi" là **chế độ ngôn ngữ** (VI / EN / VI_EN): chủ đề, câu hỏi và đáp án lọc theo chế độ này.
 - ✔ **Q4 (đã chốt 2026-11-19):** chủ đề có ít hơn 5 đáp án dùng được **không bị ẩn**; đáp án sai được lấy thêm từ **chủ đề cha**.
-  (Ví dụ FLY_VEHICLES chỉ có 5, SHAPES 6.) 🟡 chưa code: hiện chủ đề dưới 5 từ bị ẩn (mục 3).
+  (Ví dụ FLY_VEHICLES chỉ có 5, SHAPES 6.) 🔧 đã code, chờ commit:
+  - **Đáp án sai:** khi category của chủ đề không đủ 3 từ khác thì lấy phần thiếu từ các từ của **chủ đề cha** (cả cây của cha). Chỉ áp dụng cho câu nhận biết hình (IMAGE_TO_WORD, SHAPE_RECOGNITION, COLOR_RECOGNITION); phép tính, đếm số, câu thuộc tính ("Ai biết bay?") không mượn. Từ mượn vẫn phải qua kiểm tra `correct_match` (không thể cũng đúng).
+  - **Câu hỏi:** chủ đề con có ít hơn 5 từ riêng thì các câu của chủ đề cha nối thêm phía sau; từ riêng của chủ đề luôn được hỏi trước.
+  - **Chủ đề chơi được:** có ≥5 từ riêng, hoặc có ≥1 từ riêng và chủ đề cha có ≥5 từ trong cả cây.
+  - Với dữ liệu hiện tại mọi chủ đề đang hoạt động đều có ≥5 từ (ít nhất: FLY_VEHICLES 5, SHAPES 6), nên chưa có chủ đề nào đổi trạng thái; quy tắc có tác dụng khi thêm chủ đề nhỏ.
 - ✔ **Ảnh (đã chốt 2026-11-19):** chưa có ảnh thật thì **dùng emoji tạm**, không chặn chủ đề; không có mốc bắt buộc ảnh. Hiện 387 đáp án chưa có ảnh.
+
+### 4.5 Lời hỏi theo chủ đề (`question_templates`) ✅
+Nguồn thật là `R__zz_templates.sql` (chạy lại khi API khởi động); giọng đọc là file Hải Đăng trong `web/public/audio/vi`.
+| Chủ đề | Mẫu | Tiếng Việt | English |
+|---|---|---|---|
+| ANIMALS (FLY/LAND/SEA_ANIMALS) | WHAT_ANIMAL | Đây là con gì? | What animal is this? |
+| FRUITS | WHAT_FRUIT | Đây là quả gì? | What fruit is this? |
+| VEGETABLES | WHAT_VEGETABLE | Đây là rau củ gì? | What vegetable is this? |
+| NUMBERS | WHAT_NUMBER | Đây là số mấy? | What number is this? |
+| COLORS | WHAT_COLOR | Đây là màu gì? | What color is this? |
+| SHAPES | WHAT_SHAPE | Đây là hình gì? | What shape is this? |
+| OBJECTS | WHAT_IS_THIS | Đây là cái gì? | What is this? |
+| JOB (nghề nghiệp) | WHAT_JOB | **Đây là ai nhỉ?** | **Who is this?** |
+| PEOPLE_CHARACTERS | WHO_IS_THIS | **Đây là ai nhỉ?** | Who is this? |
+| LAND/SEA/FLY_VEHICLES | WHAT_VEHICLE | Đây là phương tiện gì? | What vehicle is this? |
+Hai chủ đề JOB và PEOPLE_CHARACTERS dùng chung một câu và một file giọng `who_is_this.mp3`.
 
 ## 5. Một phiên chơi
 - 5 câu mỗi phiên; 4 lựa chọn mỗi câu. ✅
@@ -127,4 +147,6 @@ Cờ bật/tắt: `app.question-selection.answer-first` (biến môi trường `
 | 2026-11-19 | Phiên đăng nhập: giới hạn user 3 phiên; dọn phiên đã kết thúc sau 90 ngày (🔧 chưa commit) |
 | 2026-11-19 | Chốt Q1 (lọc theo chế độ ngôn ngữ), Q4 (đáp án sai lấy từ chủ đề cha khi ít từ), ảnh (dùng emoji tạm, không bắt buộc ảnh); chưa code |
 | 2026-11-19 | Giai đoạn 1: phiên chơi chọn đáp án (từ) trước rồi bốc 1 câu của từ; có cờ bật/tắt (🔧 chưa commit) |
+| 2026-11-19 | Q4 đã code: đáp án sai và câu hỏi mượn từ chủ đề cha khi chủ đề ít từ; truy vấn chủ đề chơi được cập nhật (🔧 chưa commit) |
+| 2026-11-19 | Lời hỏi: JOB và PEOPLE_CHARACTERS đổi thành "Đây là ai nhỉ?" / "Who is this?"; thu lại giọng Hải Đăng (🔧 chưa commit) |
 | 2026-11-19 | Gộp toàn bộ nghiệp vụ vào file này (thay `question-generation.md`) |

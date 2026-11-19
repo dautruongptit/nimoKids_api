@@ -106,19 +106,27 @@ public interface GameQuestionRepository extends JpaRepository<GameQuestion, UUID
                 SELECT tr.root_id, t.id FROM tree tr JOIN topics t ON t.parent_id = tr.node_id WHERE t.is_active = TRUE
                   AND (CAST(:languageMode AS text) IS NULL OR CAST(:languageMode AS text) = ANY(t.supported_modes))
             )
-            SELECT tr.root_id
-            FROM tree tr
-            JOIN game_questions q ON q.topic_id = tr.node_id
-            JOIN game_modes m ON m.id = q.game_mode_id
-            LEFT JOIN answer_items a ON a.id = q.correct_answer_item_id
-            WHERE q.is_active = TRUE AND m.is_active = TRUE
-              AND (q.correct_answer_item_id IS NULL OR a.is_active = TRUE)
-              AND (:basicEnglishOnly = FALSE OR q.correct_answer_item_id IS NULL OR a.is_basic_english = TRUE)
-              AND (m.code <> :soundModeCode OR q.object_sound_id IS NOT NULL)
-              AND jsonb_typeof(q.metadata -> 'distractor_rules') = 'array'
-              AND q.age_group = 'AGE_1_3'
-            GROUP BY tr.root_id
-            HAVING count(DISTINCT COALESCE(q.correct_answer_item_id, q.id)) >= :minCount
+            , words AS (
+                SELECT tr.root_id, count(DISTINCT COALESCE(q.correct_answer_item_id, q.id)) AS n
+                FROM tree tr
+                JOIN game_questions q ON q.topic_id = tr.node_id
+                JOIN game_modes m ON m.id = q.game_mode_id
+                LEFT JOIN answer_items a ON a.id = q.correct_answer_item_id
+                WHERE q.is_active = TRUE AND m.is_active = TRUE
+                  AND (q.correct_answer_item_id IS NULL OR a.is_active = TRUE)
+                  AND (:basicEnglishOnly = FALSE OR q.correct_answer_item_id IS NULL OR a.is_basic_english = TRUE)
+                  AND (m.code <> :soundModeCode OR q.object_sound_id IS NOT NULL)
+                  AND jsonb_typeof(q.metadata -> 'distractor_rules') = 'array'
+                  AND q.age_group = 'AGE_1_3'
+                GROUP BY tr.root_id
+            )
+            -- Enough words of its own, or (Q4, BUSINESS_RULES.md 4.4) at least one of its own and a parent whose whole
+            -- subtree has enough: a session then fills the missing questions from the parent.
+            SELECT w.root_id
+            FROM words w
+            LEFT JOIN topics t ON t.id = w.root_id
+            LEFT JOIN words p ON p.root_id = t.parent_id
+            WHERE w.n >= :minCount OR (w.n >= 1 AND p.n >= :minCount)
             """, nativeQuery = true)
     List<UUID> findPlayableTopicIds(long minCount, String soundModeCode, String languageMode, boolean basicEnglishOnly);
 

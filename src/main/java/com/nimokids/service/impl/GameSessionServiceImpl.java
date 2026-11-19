@@ -150,11 +150,13 @@ public class GameSessionServiceImpl implements GameSessionService {
 
         AgeGroup ageGroup = request.resolvedAgeGroup();
         String[] ageGroups = ageGroup.inheritedGroupNames().toArray(String[]::new);
+        // Q4 (BUSINESS_RULES.md 4.4): a topic with fewer than 5 words of its own borrows the missing questions from its parent.
+        List<UUID> borrowTopics = borrowableTopicIds(topic, subtree, modeName);
         List<UUID> candidateIds;
         if (ageGroup == AgeGroup.AGE_4_5) {
             List<UUID> hard = new ArrayList<>(questionRepository.findCandidateIds(subtree, mode.getId(), new String[]{AgeGroup.AGE_4_5.name()}, basicEnglishOnly));
             List<UUID> easy = new ArrayList<>(questionRepository.findCandidateIds(subtree, mode.getId(), new String[]{AgeGroup.AGE_1_3.name()}, basicEnglishOnly));
-            if (hard.size() + easy.size() < GameConstants.QUESTIONS_PER_SESSION) {
+            if (hard.size() + easy.size() < GameConstants.QUESTIONS_PER_SESSION && borrowTopics.isEmpty()) {
                 log.warn("Not enough questions: topic={} mode={} age={} candidates={}",
                         topic != null ? topic.getCode() : "ALL", modeName, ageGroup, hard.size() + easy.size());
                 throw new InsufficientQuestionsException();
@@ -167,7 +169,7 @@ public class GameSessionServiceImpl implements GameSessionService {
             }
         } else {
             candidateIds = new ArrayList<>(questionRepository.findCandidateIds(subtree, mode.getId(), ageGroups, basicEnglishOnly));
-            if (candidateIds.size() < GameConstants.QUESTIONS_PER_SESSION) {
+            if (candidateIds.size() < GameConstants.QUESTIONS_PER_SESSION && borrowTopics.isEmpty()) {
                 log.warn("Not enough questions: topic={} mode={} age={} candidates={}",
                         topic != null ? topic.getCode() : "ALL", modeName, ageGroup, candidateIds.size());
                 throw new InsufficientQuestionsException();
@@ -179,6 +181,7 @@ public class GameSessionServiceImpl implements GameSessionService {
                 Collections.shuffle(candidateIds, ThreadLocalRandom.current());
             }
         }
+        candidateIds = withBorrowedQuestions(candidateIds, borrowTopics, mode.getId(), ageGroups, basicEnglishOnly);
 
         GameSession session = GameSession.builder()
                 .player(player)
@@ -388,6 +391,43 @@ public class GameSessionServiceImpl implements GameSessionService {
         return interleave(hard, easy);
     }
 
+    /** The topics of the PARENT's tree that are not in {@code subtree}; empty for a root topic or the MIX mode. */
+    private List<UUID> borrowableTopicIds(Topic topic, List<UUID> subtree, String modeName) {
+        if (topic == null || topic.getParentTopic() == null) {
+            return List.of();
+        }
+        List<UUID> parentTree = new ArrayList<>(topicRepository.findActiveSubtreeIds(topic.getParentTopic().getId(), modeName));
+        parentTree.removeAll(subtree);
+        return parentTree;
+    }
+
+    /**
+     * Q4: when the topic has fewer than {@link GameConstants#QUESTIONS_PER_SESSION} distinct words of its own, the questions
+     * of its parent's other topics follow its own questions, so the session still has 5 different words. The topic's own
+     * words always come first.
+     */
+    private List<UUID> withBorrowedQuestions(List<UUID> own, List<UUID> borrowTopics, UUID gameModeId, String[] ageGroups,
+                                             boolean basicEnglishOnly) {
+        if (borrowTopics.isEmpty()) {
+            return own;
+        }
+        Map<UUID, UUID> wordOf = wordOfQuestions(own);
+        long ownWords = own.stream().map(id -> wordOf.getOrDefault(id, id)).distinct().count();
+        if (ownWords >= GameConstants.QUESTIONS_PER_SESSION) {
+            return own;
+        }
+        List<UUID> extra = new ArrayList<>(questionRepository.findCandidateIds(borrowTopics, gameModeId, ageGroups, basicEnglishOnly));
+        if (answerFirst) {
+            Map<UUID, UUID> extraWordOf = wordOfQuestions(extra);
+            extra = answerFirstOrder(extra, extraWordOf::get);
+        } else {
+            Collections.shuffle(extra, ThreadLocalRandom.current());
+        }
+        List<UUID> all = new ArrayList<>(own);
+        all.addAll(extra);
+        return all;
+    }
+
     /** The answer word of each fixed-answer question; a generated question has none (it is picked as a question). */
     @SafeVarargs
     private Map<UUID, UUID> wordOfQuestions(List<UUID>... pools) {
@@ -396,6 +436,9 @@ public class GameSessionServiceImpl implements GameSessionService {
             ids.addAll(pool);
         }
         Map<UUID, UUID> wordOf = new HashMap<>();
+        if (ids.isEmpty()) {
+            return wordOf;
+        }
         for (GameQuestionRepository.QuestionAnswerKey key : questionRepository.findAnswerKeys(ids)) {
             if (key.getAnswerItemId() != null && !Boolean.TRUE.equals(key.getGenerated())) {
                 wordOf.put(key.getId(), key.getAnswerItemId());

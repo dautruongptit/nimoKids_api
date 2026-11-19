@@ -6,6 +6,7 @@ import com.nimokids.entity.AnswerItem;
 import com.nimokids.entity.GameQuestion;
 import com.nimokids.entity.MediaAsset;
 import com.nimokids.entity.SnapshotOption;
+import com.nimokids.entity.enums.QuestionType;
 import com.nimokids.exception.InsufficientDistractorsException;
 import com.nimokids.exception.BusinessException;
 import com.nimokids.exception.InvalidDistractorRulesException;
@@ -102,6 +103,25 @@ public class OptionGeneratorImpl implements OptionGenerator {
                     picked++;
                 }
             }
+            if (picked < rule.count() && dynamic == null && canBorrowFromParent(question)) {
+                // Q4: the topic's own category has too few words; borrow wrong answers from the PARENT topic's words.
+                UUID parentId = question.getTopic().getParentTopic().getId();
+                List<AnswerItem> borrowed = answerItemRepository.findRandomInTopicTree(
+                        parentId, List.copyOf(excludedIds), (rule.count() - picked) * CANDIDATES_PER_PICK, basicEnglishOnly);
+                for (AnswerItem candidate : borrowed) {
+                    if (picked == rule.count()) {
+                        break;
+                    }
+                    if (TagMatcher.satisfies(candidate.getMetadata(), correctMatch)) {
+                        continue;
+                    }
+                    if (usedNames.add(normalized(candidate.getName()))) {
+                        distractors.add(candidate);
+                        excludedIds.add(candidate.getId());
+                        picked++;
+                    }
+                }
+            }
             if (picked < rule.count()) {
                 throw new InsufficientDistractorsException("Question " + question.getId() + ": rule " + rule.match()
                         + " found " + picked + " usable items but needs " + rule.count());
@@ -126,6 +146,19 @@ public class OptionGeneratorImpl implements OptionGenerator {
                     item.getId().equals(correct.getId())));
         }
         return options;
+    }
+
+    /** Question types whose wrong answers may be any other word of the parent topic ("What is this?" style). */
+    private static final Set<QuestionType> BORROWING_TYPES =
+            Set.of(QuestionType.IMAGE_TO_WORD, QuestionType.SHAPE_RECOGNITION, QuestionType.COLOR_RECOGNITION);
+
+    /**
+     * Only picture-recognition questions borrow: for arithmetic, counting or attribute questions ("who can fly?") a word
+     * of another group could be wrong in the wrong way (a shape as the answer of 2 + 3) or also be right.
+     */
+    private static boolean canBorrowFromParent(GameQuestion question) {
+        return question.getQuestionType() != null && BORROWING_TYPES.contains(question.getQuestionType())
+                && question.getTopic() != null && question.getTopic().getParentTopic() != null;
     }
 
     /**
