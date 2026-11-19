@@ -20,7 +20,7 @@ class AuthPolicyTest {
         assertThat(policy.refreshRotation()).isTrue();
         assertThat(policy.reuseGrace()).isEqualTo(Duration.ofSeconds(10));
         assertThat(policy.maxSessionsAdmin()).isEqualTo(5);
-        assertThat(policy.maxSessionsUser()).isNull();
+        assertThat(policy.maxSessionsUser()).isEqualTo(3);
     }
 
     @Test

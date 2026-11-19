@@ -9,7 +9,7 @@ import java.util.Map;
  * session cap differs. Values come from the single row of auth_settings; a missing or invalid key falls back to the
  * default, so a bad setting can never lock everybody out.
  *
- * @param maxSessionsAdmin / maxSessionsUser  null = unlimited; when the cap is reached the OLDEST session is ended
+ * @param maxSessionsAdmin / maxSessionsUser  null = unlimited (defaults: admin 5, user 3); when the cap is reached the OLDEST session is ended
  */
 public record AuthPolicy(
         Duration accessTtl,
@@ -26,7 +26,7 @@ public record AuthPolicy(
     public static AuthPolicy defaults() {
         return new AuthPolicy(
                 Duration.ofMinutes(15), Duration.ofDays(7), Duration.ofHours(24), Duration.ofDays(7),
-                true, Duration.ofSeconds(10), Duration.ofSeconds(60), 5, null, true);
+                true, Duration.ofSeconds(10), Duration.ofSeconds(60), 5, 3, true);
     }
 
     /** Reads the settings JSON ({@code accessTtlMinutes}, {@code refreshTtlDays}, ...); unknown keys are ignored. */
